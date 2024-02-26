@@ -65,17 +65,19 @@ The initialize function will also renounce ownership as there is no reason for o
     \*/
     function initialize(uint _amount) external onlyOwner {
         require(!initialized, "already initialized!");
+        uint balBef = depToken.balanceOf(address(this));
         require(depToken.transferFrom(msg.sender, address(this), _amount), "transfer failed!");
+        _amount = depToken.balanceOf(address(this)).sub(balBef);
 
-        stakeholderToStake[address(0x0)] = Stake({
+        stakeholderToStake[address(0)] = Stake({
             staked: _amount,
             shares: _amount
         });
         totalStakes = _amount;
         totalShares = _amount;
         initialized = true;
-        owner = address(0x0);
-        emit StakeAdded(address(0x0), _amount, _amount, block.timestamp);
+        owner = address(0);
+        emit StakeAdded(address(0), _amount, _amount, block.timestamp);
     }
 ```
 
@@ -87,13 +89,15 @@ The shares that the users receives is the **deposited amount * total shares / tb
     /*\
     stake tokens
     \*/
-     function _deposit(address _account, uint _amount) private {
+    function _deposit(address _account, uint _amount) private {
         require(initialized, "not initialized!");
         require(_amount > 0, "amount too small!");
 
         uint tbal = depToken.balanceOf(address(this)).add(rewToken.balanceOf(address(this)));
         uint shares = _amount.mul(totalShares).div(tbal);
+        uint balBef = depToken.balanceOf(address(this));
         require(depToken.transferFrom(_account, address(this), _amount), "transfer failed!");
+        _amount = depToken.balanceOf(address(this)).sub(balBef);
 
         stakeholders.add(_account);
         stakeholderToStake[_account] = Stake({
@@ -112,7 +116,7 @@ For the Withdraw we first call our **rewardOf()** function and then update all v
 /*\
     remove staked tokens
     \*/
-    function _withdraw(address _account) internal {
+   function _withdraw(address _account) internal {
         require(stakeholderToStake[_account].staked > 0, "not staked!");
         uint rewards = rewardOf(_account);
         uint stake = stakeholderToStake[_account].staked;
@@ -132,6 +136,7 @@ For the Withdraw we first call our **rewardOf()** function and then update all v
 
         emit StakeRemoved(_account, stake, shares, rewards, block.timestamp);
     }
+
 ```
 
 **rewardOf**
@@ -149,14 +154,14 @@ The reward is calculated as follows: the user shares * (current ratio - user rat
             return 0;
         }
 
-        uint stakedRatio = stakeholderStake.mul(1e18).div(stakeholderShares);
-        uint currentRatio = getRatio();
-
+        uint stakedRatio = stakeholderStake.mul(1e18);
+        uint currentRatio = stakeholderShares.mul(getRatio());
+        
         if (currentRatio <= stakedRatio) {
             return 0;
         }
-
-        uint rewards = stakeholderShares.mul(currentRatio.sub(stakedRatio)).div(1e18);
+        
+        uint rewards = currentRatio.sub(stakedRatio).div(1e18);
         return rewards;
     }
 ```
@@ -167,14 +172,11 @@ Now even tho there should be no errors or edge cases, there is always a non-zero
     /*\
     withdraw function if in emergency state (no rewards)
     \*/
-    function emergencyWithdraw() external returns(bool) {
+   function emergencyWithdraw() external returns(bool) {
         uint stake = stakeholderToStake[msg.sender].staked;
         uint shares = stakeholderToStake[msg.sender].shares;
 
-        stakeholderToStake[msg.sender] = Stake({
-            staked: 0,
-            shares: 0
-        });
+        delete stakeholderToStake[msg.sender];
         totalShares = totalShares.sub(shares);
         totalStakes = totalStakes.sub(stake);
 
@@ -186,4 +188,5 @@ Now even tho there should be no errors or edge cases, there is always a non-zero
 ```
 
 **Misc**
-There are some for less fundamental functions of this contract. There are more things do to such as maybe ass time locks and custom withdraw amounts. The whole code is up on github
+There are some for less fundamental functions of this contract. There are more things do to such as maybe ass time locks and custom withdraw amounts. The whole code is up on [github](https://github.com/Solidity-X/Dynamic-Staking/tree/main)
+And if you need a professional smart contract dev for your next project then contact me on telegram: @solidityX
