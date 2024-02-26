@@ -67,17 +67,19 @@ contract Staking {
     \*/
     function initialize(uint _amount) external onlyOwner {
         require(!initialized, "already initialized!");
+        uint balBef = depToken.balanceOf(address(this));
         require(depToken.transferFrom(msg.sender, address(this), _amount), "transfer failed!");
+        _amount = depToken.balanceOf(address(this)).sub(balBef);
 
-        stakeholderToStake[address(0x0)] = Stake({
+        stakeholderToStake[address(0)] = Stake({
             staked: _amount,
             shares: _amount
         });
         totalStakes = _amount;
         totalShares = _amount;
         initialized = true;
-        owner = address(0x0);
-        emit StakeAdded(address(0x0), _amount, _amount, block.timestamp);
+        owner = address(0);
+        emit StakeAdded(address(0), _amount, _amount, block.timestamp);
     }
 
     /*\
@@ -95,10 +97,7 @@ contract Staking {
         uint stake = stakeholderToStake[msg.sender].staked;
         uint shares = stakeholderToStake[msg.sender].shares;
 
-        stakeholderToStake[msg.sender] = Stake({
-            staked: 0,
-            shares: 0
-        });
+        delete stakeholderToStake[msg.sender];
         totalShares = totalShares.sub(shares);
         totalStakes = totalStakes.sub(stake);
 
@@ -149,7 +148,9 @@ contract Staking {
 
         uint tbal = depToken.balanceOf(address(this)).add(rewToken.balanceOf(address(this)));
         uint shares = _amount.mul(totalShares).div(tbal);
+        uint balBef = depToken.balanceOf(address(this));
         require(depToken.transferFrom(_account, address(this), _amount), "transfer failed!");
+        _amount = depToken.balanceOf(address(this)).sub(balBef);
 
         stakeholders.add(_account);
         stakeholderToStake[_account] = Stake({
@@ -231,14 +232,14 @@ contract Staking {
             return 0;
         }
 
-        uint stakedRatio = stakeholderStake.mul(1e18).div(stakeholderShares);
-        uint currentRatio = getRatio();
-
+        uint stakedRatio = stakeholderStake.mul(1e18);
+        uint currentRatio = stakeholderShares.mul(getRatio());
+        
         if (currentRatio <= stakedRatio) {
             return 0;
         }
-
-        uint rewards = stakeholderShares.mul(currentRatio.sub(stakedRatio)).div(1e18);
+        
+        uint rewards = currentRatio.sub(stakedRatio).div(1e18);
         return rewards;
     }
 }
